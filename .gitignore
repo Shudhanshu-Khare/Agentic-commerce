@@ -1,0 +1,12 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.DS_Store
+data/price_history.db
+data/query_cache.json
+data/evaluator_llm_cache.json
+data/timing_log.json
+data/agentic_commerce.log

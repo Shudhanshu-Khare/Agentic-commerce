@@ -1,0 +1,24 @@
+[
+  {
+    "query": "bluetooth speaker 20 watt portable under 3000",
+    "budget": 3000,
+    "labels": [
+      3,
+      3,
+      2,
+      2,
+      1,
+      0,
+      2,
+      1,
+      1,
+      0
+    ],
+    "label_scale": {
+      "3": "perfect match",
+      "2": "good match",
+      "1": "acceptable/category match",
+      "0": "irrelevant"
+    }
+  }
+]
