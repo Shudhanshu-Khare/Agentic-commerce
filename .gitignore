@@ -7,7 +7,7 @@ __pycache__/
 .env
 .DS_Store
 
-# Runtime data (generated locally, not for GitHub)
+# Runtime data
 data/price_history.db
 data/query_cache.json
 data/evaluator_llm_cache.json
