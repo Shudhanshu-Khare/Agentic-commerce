@@ -1,272 +1,315 @@
 # Agentic Commerce
 
-Agentic Commerce is a multi-agent product discovery system for Amazon.in and Flipkart. A user enters a product, budget, and required specs; the app scrapes live marketplace data, checks product fit and review trust, then returns a ranked Top 10 with score breakdowns and human-readable reasons.
+Multi-agent product discovery and ranking system that scrapes live data from Amazon.in and Flipkart, analyzes review authenticity, matches specifications, and produces a scored Top 10 ranking with explanations.
 
-The goal was not to build another keyword search page. I wanted the system to behave more like a careful shopping analyst: understand the request, collect candidates from multiple sources, reject bad matches, account for trust signals, and explain why one product is better than another.
+The system takes a product name, budget, and specs as input, then runs five specialized agents in sequence to collect, validate, and rank products based on seven weighted scoring factors.
 
-## Highlights
+## Architecture
 
-- Five-agent pipeline: Profiler, Scraper, Historian, Detective, and Evaluator.
-- Live Amazon.in and Flipkart collection using ScraperAPI, direct HTTP parsing, and Playwright fallbacks.
-- LLM-backed intent parsing and specification matching with Groq/LLaMA.
-- Hard veto rules for wrong category, failed mandatory specs, unsafe budget mismatch, and weak review evidence.
-- Seven-factor scoring model covering price, specs, rating, popularity, seller trust, review trust, and price history.
-- Local query caching and evaluator LLM-result caching to reduce repeat latency and API usage.
-- SQLite price observations for historical context across repeated runs.
-- Streamlit dashboard with per-agent progress, timings, score details, and ranking explanations.
-- Offline evaluation script for ranking metrics such as Precision@K, NDCG, budget compliance, and monotonicity.
-
-## How It Works
-
-```text
-User request
-   |
-   v
-Agent 1: Profiler
-   Converts natural language into a validated shopping profile.
-   Example: category, product type, budget, mandatory specs, preferred specs.
-   |
-   v
-Agent 2: Scraper
-   Collects Amazon.in and Flipkart candidates with layered fallbacks.
-   Deduplicates near-identical products across platforms.
-   |
-   v
-Agent 3: Historian
-   Adds market-price context from SQLite history when available,
-   otherwise falls back to batch-relative price comparison.
-   |
-   v
-Agent 4: Detective
-   Scores review trust using metadata heuristics plus batched LLM analysis
-   for suspicious products.
-   |
-   v
-Agent 5: Evaluator
-   Applies keyword prefiltering, AI spec matching, scoring, hard vetoes,
-   and final Top 10 ranking.
+```
+User Input (product, budget, specs)
+        |
+        v
++-------------------+     Groq LLaMA 3.1 8B
+|  Agent 1: Profiler | --> Extracts category, product type, budget,
++-------------------+     mandatory/preferred specs, search keywords
+        |
+        v
++-------------------+     ScraperAPI + BeautifulSoup + Playwright
+|  Agent 2: Scraper  | --> Concurrent Amazon.in + Flipkart scraping
++-------------------+     with 3-layer fallback per platform
+        |
+        v
++-------------------+     SQLite price history + batch median
+|  Agent 3: Historian| --> Adds 30-day price context or relative
++-------------------+     market comparison for each product
+        |
+        v
++-------------------+     5 heuristic signals + selective LLM
+|  Agent 4: Detective| --> Detects fake reviews using rating/price
++-------------------+     anomalies, volume patterns, cross-platform gaps
+        |
+        v
++-------------------+     Keyword filter -> LLM spec match -> 7-factor scoring
+|  Agent 5: Evaluator| --> Hard vetoes, weighted ranking, score breakdown,
++-------------------+     human-readable reasons per product
+        |
+        v
+  Streamlit Dashboard
+  (ranked results with score details)
 ```
 
-## Agents
+## Scoring Model
 
-| Agent | Role | Key Design Choice |
-| --- | --- | --- |
-| Profiler | Parses the user's request into structured JSON | Uses Groq/LLaMA with validation and fallback parsing |
-| Scraper | Collects product candidates | Runs Amazon and Flipkart concurrently, then repairs partial data from backups when possible |
-| Historian | Adds price context | Uses SQLite price history first, relative market median second |
-| Detective | Estimates review authenticity | Combines deterministic metadata signals with selective LLM checks |
-| Evaluator | Produces the final ranking | Uses hard vetoes before scoring so irrelevant products do not survive just because they are cheap or popular |
+Each product gets a final score from 0 to 100 based on seven normalized components:
 
-## Ranking Model
-
-Each product receives normalized component scores and then a weighted final score from 0 to 100.
-
-```text
-final_score =
-    spec_weight          * spec_score
-  + price_weight         * price_score
-  + rating_weight        * rating_score
-  + popularity_weight    * popularity_score
-  + price_history_weight * price_history_score
-  + seller_weight        * seller_score
-  + trust_weight         * trust_score
+```
+final_score = spec * w1 + price * w2 + rating * w3 + popularity * w4
+            + price_history * w5 + seller * w6 + trust * w7
 ```
 
-The weights change by category. For example, electronics gives more importance to specs, while consumables and fashion give more importance to trust and ratings.
-
-### Score Components
+Weights are category-dependent. Electronics prioritizes spec match (25%), fashion prioritizes ratings (30%), consumables prioritizes trust (30%).
 
 | Component | What It Measures |
-| --- | --- |
-| `spec_score` | How well the title/specs satisfy mandatory and preferred requirements |
-| `price_score` | Budget fit using a sweet-spot curve around practical buying behavior |
-| `rating_score` | Bayesian rating score so low-review 5-star items are not overtrusted |
-| `popularity_score` | Log-normalized review count within the candidate batch |
-| `price_history_score` | Historical or market-relative price attractiveness |
-| `seller_score` | Platform and seller reliability |
-| `trust_score` | Review authenticity based on Detective signals |
+|---|---|
+| Spec Score | How well the product satisfies mandatory and preferred requirements |
+| Price Score | Budget fit using a sweet-spot curve centered around practical buying behavior |
+| Rating Score | Bayesian-adjusted rating so low-review 5-star items are not overtrusted |
+| Popularity Score | Log-normalized review count within the candidate batch |
+| Price History Score | Historical or market-relative price attractiveness |
+| Seller Score | Platform verification and seller reliability signals |
+| Trust Score | Review authenticity based on Detective heuristic + LLM analysis |
 
-## Hard Veto Rules
+### Hard Veto Rules
 
-The system deliberately removes products that should not compete in the final ranking:
+Products are removed entirely before scoring if they meet any of these conditions:
 
-- Wrong product category or brand mismatch.
-- Accessory result when the user asked for the main product.
-- Clear contradiction of mandatory specs.
-- Price more than 50% above budget.
-- Price unrealistically below budget, which often indicates a wrong product.
-- Missing price data.
-- Fewer than 10 reviews.
-- Very low review-trust score, which caps the final score.
+- Wrong product category or brand mismatch
+- Accessory result when the user asked for the main product (e.g., a phone case when the query was for a phone)
+- Clear contradiction of mandatory specs
+- Price more than 50% above budget
+- Price unrealistically below budget (likely wrong product)
+- Missing price data
+- Fewer than 10 reviews
 
-This is important because a pure weighted score can accidentally reward cheap but irrelevant products. The veto layer keeps the ranking aligned with the user's actual intent.
+This prevents a pure weighted score from accidentally promoting cheap but irrelevant products.
 
-## Reliability and Performance
+### Category Weight Profiles
 
-- Query results are cached for 24 hours in `data/query_cache.json`.
-- Evaluator LLM decisions are cached separately in `data/evaluator_llm_cache.json`.
-- Scraping uses multiple layers: ScraperAPI, direct HTTP with BeautifulSoup, and Playwright as a browser fallback.
-- Scrape backups are stored as JSON so a partial live scrape can still be repaired.
-- Evaluator LLM spec matching is batched to reduce API calls.
-- Groq evaluator batches run sequentially to avoid free-tier rate-limit retries.
-- Agent timings are recorded and shown in the Streamlit UI.
+| Category | Highest Weight | Lowest Weight |
+|---|---|---|
+| Electronics | Spec (25%) | Seller (5%) |
+| Fashion | Rating (30%) | Spec (5%) |
+| Appliances | Spec (20%) | Trust (10%) |
+| Consumables | Trust (30%) | Price History (2%) |
+| Furniture | Rating (25%) | Price History (3%) |
+
+## Scraping Strategy
+
+Each platform uses a 3-layer fallback:
+
+```
+Layer 1: ScraperAPI (proxy-backed HTML)
+    |
+    v (if ScraperAPI fails or returns < 3 results)
+Layer 2: Direct HTTP + BeautifulSoup parsing
+    |
+    v (if direct HTTP fails)
+Layer 3: Playwright headless browser with stealth plugins
+```
+
+- Amazon and Flipkart scrapers run concurrently using `asyncio.gather`
+- If a live scrape returns fewer than 5 products for a platform, the system loads the most recent backup JSON for that query
+- Successful scrapes with 10+ products per platform are saved as backups for future fallback
+
+## Fake Review Detection
+
+The Detective agent uses five independent heuristic signals, each contributing a weighted suspicion score:
+
+| Signal | Weight | What It Detects |
+|---|---|---|
+| Rating-Volume Mismatch | 25% | High ratings with suspiciously few reviews |
+| Price-Rating Anomaly | 30% | Premium products with statistically improbable perfect scores |
+| Review Velocity | 15% | Sudden review count spikes suggesting coordinated campaigns |
+| Cross-Platform Gap | 20% | Same product rated very differently on Amazon vs Flipkart |
+| LLM Review Analysis | 10% | Semantic check on review summaries for products that cross the suspicion threshold |
+
+Products with high suspicion get their final score capped at 40/100, regardless of other factors.
 
 ## Tech Stack
 
-| Area | Tools |
-| --- | --- |
-| UI | Streamlit |
-| Agent orchestration | LangGraph, manual progress-aware Streamlit pipeline |
-| LLM | Groq API with LLaMA 3.1 |
-| Scraping | ScraperAPI, requests, BeautifulSoup, Playwright |
-| Validation | Pydantic |
-| Storage | SQLite, local JSON cache |
-| Evaluation | Custom Python metrics for ranking quality |
+| Layer | Technology |
+|---|---|
+| Frontend | Streamlit |
+| LLM | Groq API with LLaMA 3.1 8B Instant |
+| Agent Framework | LangChain, LangGraph |
+| Scraping | ScraperAPI, Requests, BeautifulSoup4, Playwright with Stealth |
+| Data Validation | Pydantic |
+| Storage | SQLite (price history), JSON (query cache, evaluator cache, backups) |
+| Evaluation | Custom ranking metrics (Precision@K, NDCG, budget compliance) |
 
 ## Project Structure
 
-```text
-app.py                         Streamlit app and progress-aware pipeline
-start.bat                      Windows launcher for the Streamlit app
-clean.bat                      Local cleanup helper
+```
+app.py                           Streamlit frontend and pipeline orchestration
+start.bat                        Windows launcher
 
 agents/
-  profiler.py                  Intent extraction
-  scraper.py                   Scrape orchestration, backup loading, deduplication
-  historian.py                 Price-history and market-median enrichment
-  detective.py                 Review trust and suspicious-pattern detection
-  evaluator.py                 Spec matching, scoring, vetoes, and ranking
-  graph.py                     LangGraph entry point for non-UI usage
+  profiler.py                    LLM-based intent extraction to structured JSON
+  scraper.py                     Concurrent scraping, deduplication, backup fallback
+  historian.py                   Price history enrichment with SQLite + market median
+  detective.py                   5-signal review trust scoring with LLM fallback
+  evaluator.py                   3-stage evaluation: keyword filter, LLM spec match, scoring
+  graph.py                       LangGraph entry point for non-UI pipeline execution
 
 core/
-  scoring.py                   Score components, category weights, final ranking logic
-  schemas.py                   Pydantic models
-  validation.py                Runtime validation helpers
-  price_history.py             SQLite price observation store
-  cache.py                     Query result cache
-  evaluator_cache.py           LLM spec-match cache
-  timing.py                    Agent latency logging
-  eval_metrics.py              Offline ranking metrics
-  logging_config.py            File logging setup
+  scoring.py                     7-factor scoring model, category weights, veto rules
+  schemas.py                     Pydantic models for pipeline data
+  validation.py                  Runtime validation helpers
+  price_history.py               SQLite price observation store
+  cache.py                       24-hour query result cache
+  evaluator_cache.py             LLM spec-match result cache
+  timing.py                      Agent latency recording and percentile stats
+  eval_metrics.py                Offline ranking quality metrics
+  logging_config.py              File-based logging configuration
 
 scrapers/
-  amazon_scraper.py            Amazon.in scraper with layered fallbacks
-  flipkart_scraper.py          Flipkart scraper with query variants and fallbacks
-  review_summary_scraper.py    Optional deeper review-summary extraction module
+  amazon_scraper.py              Amazon.in scraper (ScraperAPI + HTTP + Playwright)
+  flipkart_scraper.py            Flipkart scraper (ScraperAPI + HTTP + Playwright)
+  review_summary_scraper.py      Optional review summary extraction
+  _utils.py                      Shared selector helpers and JSON extraction
 
 scripts/
-  evaluate_rankings.py         Offline evaluation runner
+  evaluate_rankings.py           Offline evaluation runner
 
 eval/
-  ground_truth.example.json    Example relevance labels for evaluation
+  ground_truth.example.json      Example relevance labels for ranking evaluation
 
 data/
-  *.json                       Saved scrape backups and sample result data
+  sample_bluetooth_speaker_results.json   Sample output for reference
 ```
 
 ## Setup
 
-Create and activate a virtual environment:
+### Prerequisites
 
-```powershell
-python -m venv venv
-venv\Scripts\activate
+- Python 3.10 or higher
+- pip
+- A free Groq API key from [console.groq.com](https://console.groq.com)
+- (Optional) A ScraperAPI key from [scraperapi.com](https://www.scraperapi.com) for proxy-backed scraping
+
+### Step 1: Clone and enter the project
+
+```bash
+git clone https://github.com/Shudhanshu-Khare/Agentic-commerce.git
+cd Agentic-commerce
 ```
 
-Install dependencies:
+### Step 2: Create a virtual environment
 
-```powershell
+```bash
+python -m venv venv
+```
+
+Activate it:
+
+```bash
+# Windows
+venv\Scripts\activate
+
+# macOS / Linux
+source venv/bin/activate
+```
+
+### Step 3: Install dependencies
+
+```bash
 pip install -r requirements.txt
+```
+
+### Step 4: Install the Playwright browser
+
+Playwright needs Chromium for browser-based scraping fallback:
+
+```bash
 playwright install chromium
 ```
+
+This downloads Chromium once (~150 MB). You only need to run this the first time.
+
+### Step 5: Set up environment variables
 
 Create a `.env` file in the project root:
 
 ```env
-GROQ_API_KEY=your_groq_key
-SCRAPER_API_KEY=your_scraperapi_key
+GROQ_API_KEY=your_groq_api_key_here
+SCRAPER_API_KEY=your_scraperapi_key_here
 ```
 
-`SCRAPER_API_KEY` is optional, but recommended. Without it, the scraper falls back to direct HTTP and Playwright.
+`GROQ_API_KEY` is required. It powers all LLM calls (profiler, spec matching, review analysis).
 
-## Running the App
+`SCRAPER_API_KEY` is optional but recommended. Without it, the scraper uses direct HTTP requests and Playwright, which are more likely to be blocked by anti-bot systems.
 
-On Windows:
+### Step 6: Run
 
-```powershell
-.\start
-```
-
-Or run Streamlit directly:
-
-```powershell
+```bash
 streamlit run app.py
 ```
 
-Once Streamlit starts, open the local URL shown in the terminal, usually:
+Or on Windows, double-click `start.bat`.
 
-```text
-http://localhost:8501
+The terminal will display the pipeline progress. Open the URL shown (usually `http://localhost:8501`) in your browser.
+
+## Example Output
+
 ```
-
-## Example Terminal Flow
-
-```text
-AGENT 1 - PROFILER
+========================================
+  AGENT 1 | PROFILER
+========================================
    Category : electronics
-   Product  : smartwatch
-   Budget   : Rs 2,000
-   Keywords : noise black
-   Time     : 1.3s
+   Product  : bluetooth speaker
+   Budget   : Rs 3,000
+   Keywords : 20 watt portable
+   Duration : 1.8s
 
-AGENT 2 - SCRAPER
-   Search : "smartwatch noise black"
-   Amazon.in    22 products
-   Flipkart     0 products
+========================================
+  AGENT 2 | SCRAPER
+========================================
+   Search : "bluetooth speaker 20 watt portable"
+   Amazon.in    [OK]   18 products
+   Flipkart     [OK]   12 products
 
-AGENT 3 - HISTORIAN
-   Market Median : Rs 1,499.0
+========================================
+  AGENT 3 | HISTORIAN
+========================================
+   Market Median : Rs 1,899.0
 
-AGENT 4 - DETECTIVE
-   Scanning products for review manipulation...
-   Results: Authentic / Suspicious / Highly Suspicious
+========================================
+  AGENT 4 | DETECTIVE
+========================================
+   Scanning 24 products for review manipulation...
+   Results : Authentic: 22, Suspicious: 2
 
-AGENT 5 - EVALUATOR
-   Stage 1 - Keyword Filter
-   Stage 2 - AI Spec Match
-   Stage 3 - Scoring
+========================================
+  AGENT 5 | EVALUATOR
+========================================
+   Stage 1 - Keyword Filter  : 15 passed, 9 vetoed
+   Stage 2 - AI Spec Match   : 14 passed, 1 vetoed
+   Stage 3 - Scoring         : 14 products scored
 
-PIPELINE COMPLETE
+========================================
+  COMPLETE | 10 results in 38.5s
+========================================
 ```
 
 ## Offline Evaluation
 
-Run ranking checks against a saved result JSON:
+Run ranking quality checks against a ground-truth file:
 
-```powershell
-python scripts\evaluate_rankings.py --results data\your_results.json --truth eval\ground_truth.example.json
+```bash
+python scripts/evaluate_rankings.py --results data/your_results.json --truth eval/ground_truth.example.json
 ```
 
-The evaluator reports metrics such as:
+Reported metrics:
 
-- Precision@K
-- NDCG@10
-- Budget compliance
-- Score monotonicity
-- Verdict distribution
+| Metric | Description |
+|---|---|
+| Precision@K | Fraction of top-K results that are relevant |
+| NDCG@10 | Normalized discounted cumulative gain |
+| Budget Compliance | Percentage of results within the stated budget |
+| Score Monotonicity | Whether higher-ranked products consistently have higher scores |
+| Verdict Distribution | Breakdown of Authentic / Suspicious / Highly Suspicious |
 
-## Why This Is Not A Chatbot
+## Caching and Performance
 
-- Unlike chatbot shopping assistants, Agentic Commerce uses a
-deterministic ranking pipeline with hard constraints and explicit
-tradeoffs.
-- LLMs are used only where semantic understanding is required:
-intent extraction, specification interpretation, and suspicious
-review reasoning.
-- Final ranking decisions remain explainable and reproducible.
+- Query results are cached for 24 hours in `data/query_cache.json` to avoid redundant scraping
+- Evaluator LLM spec-match decisions are cached separately in `data/evaluator_llm_cache.json`
+- Price observations are stored in SQLite (`data/price_history.db`) and accumulate across runs for historical context
+- Evaluator LLM batching groups multiple products into single API calls to reduce Groq usage
+- Scrape backups are saved as JSON so partial live scrapes can be repaired from recent data
 
 ## Notes
 
-- Live scraping can vary because marketplace pages and anti-bot behavior change often.
-- `.env`, local caches, SQLite databases, logs, and virtual environments are ignored by git.
-- The app is built as a product intelligence project, not as checkout automation.
+- Live scraping results vary because marketplace HTML and anti-bot behavior change frequently.
+- `.env`, caches, SQLite databases, logs, backups, and virtual environments are all gitignored.
+- LLMs are used only where semantic understanding is required: intent extraction, spec interpretation, and review analysis. All ranking decisions are deterministic and explainable.

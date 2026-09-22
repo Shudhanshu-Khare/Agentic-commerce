@@ -8,6 +8,7 @@ import time
 from difflib import SequenceMatcher
 from playwright.async_api import async_playwright
 from playwright_stealth import Stealth
+from scrapers._utils import try_selectors as _try_selectors, try_selectors_all as _try_selectors_all
 
 AMAZON_SELECTORS = {
     "search_result": [
@@ -83,22 +84,6 @@ Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 });
 
 # Parser helpers
 
-async def _try_selectors(parent, selectors: list[str]):
-    for selector in selectors:
-        try:
-            el = await parent.query_selector(selector)
-            if el: return el
-        except Exception: continue
-    return None
-
-async def _try_selectors_all(page, selectors: list[str]):
-    for selector in selectors:
-        try:
-            items = await page.query_selector_all(selector)
-            if items and len(items) > 2: return items
-        except Exception: continue
-    return []
-
 def parse_price(text: str) -> float:
     if not text: return 0.0
     cleaned = re.sub(r'[^\d.]', '', str(text).replace(',', ''))
@@ -118,7 +103,6 @@ def parse_reviews(text: str) -> int:
     
     # Flipkart often bundles text: "4.62,73,879 Ratings&9,563 Reviews128 GB ROM"
     # We want the number before "Review" or the last large number available.
-    import re
     text_lower = str(text).lower()
     
     match = re.search(r'([\d,kKmM.]+)\s*review', text_lower)
@@ -186,7 +170,6 @@ def _scrape_amazon_scraperapi(query: str, max_results: int = 25, budget: int = 0
 
     products = []
     seen_titles = []
-    core_keywords = [w.lower() for w in product_type.split() if len(w) > 2] if product_type else []
 
     # Scrape up to 2 pages via ScraperAPI (each page = 1 API credit)
     for page_num in range(1, 3):
@@ -290,7 +273,6 @@ def _scrape_amazon_requests(query: str, max_results: int = 25, budget: int = 0, 
 
     products = []
     seen_titles = []  # For scrape-time dedup
-    core_keywords = [w.lower() for w in product_type.split() if len(w) > 2] if product_type else []
     ua = random.choice(AMAZON_USER_AGENTS)
     headers = {
         "User-Agent": ua,
@@ -410,7 +392,6 @@ async def _scrape_amazon_playwright(query: str, max_results: int = 25, budget: i
     """Playwright-based scraper with stealth — used as fallback."""
     products = []
     seen_titles = []  # For scrape-time dedup
-    core_keywords = [w.lower() for w in product_type.split() if len(w) > 2] if product_type else []
     async with async_playwright() as p:
         browser = await p.chromium.launch(
             headless=False,

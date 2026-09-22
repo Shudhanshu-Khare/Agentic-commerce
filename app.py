@@ -130,7 +130,9 @@ def run_pipeline_with_progress(user_input: dict) -> dict:
 
     timings = {}
     with st.status("Agentic pipeline running...", expanded=True) as status:
-        terminal_log("\n🧠 AGENT 1 — PROFILER")
+        terminal_log("\n========================================")
+        terminal_log("  AGENT 1 | PROFILER")
+        terminal_log("========================================")
         st.write("Agent 1 - Profiler: understanding your request...")
         with agent_timer("profiler", timings):
             profile = run_profiler(
@@ -144,19 +146,23 @@ def run_pipeline_with_progress(user_input: dict) -> dict:
         terminal_log(f"   Product  : {profile.get('product_type', '')}")
         terminal_log(f"   Budget   : {format_terminal_price(profile.get('budget_inr'))}")
         terminal_log(f"   Keywords : {profile_keywords(profile, user_input)}")
-        terminal_log(f"   Time     : {timings['profiler']}s")
+        terminal_log(f"   Duration : {timings['profiler']}s")
         st.write(
             f"Done: {profile.get('product_type')} | Budget: {format_price(profile.get('budget_inr'))} "
             f"({timings['profiler']}s)"
         )
 
-        terminal_log("\n🌐 AGENT 2 — SCRAPER")
+        terminal_log("\n========================================")
+        terminal_log("  AGENT 2 | SCRAPER")
+        terminal_log("========================================")
         st.write("Agent 2 - Scraper: searching Amazon and Flipkart...")
         with agent_timer("scraper", timings):
             raw_products = run_scraper(profile)
         st.write(f"Done: collected {len(raw_products)} products ({timings['scraper']}s)")
 
-        terminal_log("\n📈 AGENT 3 — HISTORIAN")
+        terminal_log("\n========================================")
+        terminal_log("  AGENT 3 | HISTORIAN")
+        terminal_log("========================================")
         st.write("Agent 3 - Historian: analyzing market and price history...")
         with agent_timer("historian", timings):
             unique_products = deduplicate_products(raw_products)
@@ -170,7 +176,9 @@ def run_pipeline_with_progress(user_input: dict) -> dict:
             f"({timings['historian']}s)"
         )
 
-        terminal_log("\n🔍 AGENT 4 — DETECTIVE")
+        terminal_log("\n========================================")
+        terminal_log("  AGENT 4 | DETECTIVE")
+        terminal_log("========================================")
         st.write("Agent 4 - Detective: detecting suspicious review patterns...")
         with agent_timer("detective", timings):
             products_trust = run_detective(products_history)
@@ -180,12 +188,16 @@ def run_pipeline_with_progress(user_input: dict) -> dict:
             f"Done: {flagged} flagged, {llm_checked} LLM-checked ({timings['detective']}s)"
         )
 
-        terminal_log("\n🏆 AGENT 5 — EVALUATOR")
+        terminal_log("\n========================================")
+        terminal_log("  AGENT 5 | EVALUATOR")
+        terminal_log("========================================")
         st.write("Agent 5 - Evaluator: scoring and ranking...")
         with agent_timer("evaluator", timings):
             ranked_products = run_evaluator(products_trust, profile)
         total_time = round(sum(timings.values()), 2)
-        terminal_log(f"\n✅ PIPELINE COMPLETE — {len(ranked_products)} results in {total_time}s\n")
+        terminal_log(f"\n========================================")
+        terminal_log(f"  COMPLETE | {len(ranked_products)} results in {total_time}s")
+        terminal_log(f"========================================\n")
         status.update(
             label=f"Pipeline complete - {len(ranked_products)} products ranked in {total_time}s",
             state="complete",

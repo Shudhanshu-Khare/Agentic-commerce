@@ -6,6 +6,7 @@ import random
 import time
 from difflib import SequenceMatcher
 from playwright.async_api import async_playwright
+from scrapers._utils import try_selectors as _try_selectors, try_selectors_all as _try_selectors_all
 
 FLIPKART_SELECTORS = {
     "card": [
@@ -72,22 +73,6 @@ FLIPKART_USER_AGENTS = [
 
 # Parser helpers
 
-async def _try_selectors(parent, selectors: list[str]):
-    for selector in selectors:
-        try:
-            el = await parent.query_selector(selector)
-            if el: return el
-        except Exception: continue
-    return None
-
-async def _try_selectors_all(page, selectors: list[str]):
-    for selector in selectors:
-        try:
-            items = await page.query_selector_all(selector)
-            if items and len(items) > 2: return items
-        except Exception: continue
-    return []
-
 def parse_price(text: str) -> float:
     if not text: return 0.0
     text = str(text).replace('\u20b9', '').replace('₹', '')
@@ -132,7 +117,7 @@ async def dismiss_login_popup(page):
     except Exception: pass
     return False
 
-def _filter_and_dedup(title, price, reviews, budget, core_keywords, seen_titles):
+def _filter_and_dedup(title, price, reviews, budget, seen_titles):
     """Shared filtering logic for all strategies. Returns True if product should be kept."""
     if not title or price == 0:
         return False
@@ -150,7 +135,7 @@ def _filter_and_dedup(title, price, reviews, budget, core_keywords, seen_titles)
     return True
 
 
-def _parse_flipkart_items_bs4(soup, max_results, budget, product_type, seen_titles, core_keywords):
+def _parse_flipkart_items_bs4(soup, max_results, budget, product_type, seen_titles):
     """Shared BeautifulSoup parsing for ScraperAPI and direct HTTP responses."""
     products = []
 
@@ -210,7 +195,7 @@ def _parse_flipkart_items_bs4(soup, max_results, budget, product_type, seen_titl
             if img_el and img_el.get("src"): break
         img = img_el.get("src", "") if img_el else ""
 
-        if not _filter_and_dedup(title, price, reviews, budget, core_keywords, seen_titles):
+        if not _filter_and_dedup(title, price, reviews, budget, seen_titles):
             continue
 
         full_url = f"https://www.flipkart.com{href}" if href.startswith("/") else href
@@ -232,7 +217,6 @@ def _scrape_flipkart_scraperapi(query: str, max_results: int = 25, budget: int =
         return []
 
     seen_titles = []
-    core_keywords = [w.lower() for w in product_type.split() if len(w) > 2] if product_type else []
 
     target_url = f"https://www.flipkart.com/search?q={query.replace(' ', '+')}"
     try:
@@ -245,7 +229,7 @@ def _scrape_flipkart_scraperapi(query: str, max_results: int = 25, budget: int =
             return []
 
         soup = BeautifulSoup(resp.text, "html.parser")
-        return _parse_flipkart_items_bs4(soup, max_results, budget, product_type, seen_titles, core_keywords)
+        return _parse_flipkart_items_bs4(soup, max_results, budget, product_type, seen_titles)
 
     except Exception as e:
         print(f"  [Flipkart/ScraperAPI] Error: {e}")
@@ -258,7 +242,6 @@ def _scrape_flipkart_http(query: str, max_results: int = 25, budget: int = 0, pr
     from bs4 import BeautifulSoup
 
     seen_titles = []
-    core_keywords = [w.lower() for w in product_type.split() if len(w) > 2] if product_type else []
 
     headers = {
         "User-Agent": random.choice(FLIPKART_USER_AGENTS),
@@ -273,7 +256,7 @@ def _scrape_flipkart_http(query: str, max_results: int = 25, budget: int = 0, pr
             return []
 
         soup = BeautifulSoup(resp.text, "html.parser")
-        return _parse_flipkart_items_bs4(soup, max_results, budget, product_type, seen_titles, core_keywords)
+        return _parse_flipkart_items_bs4(soup, max_results, budget, product_type, seen_titles)
 
     except Exception as e:
         print(f"  [Flipkart/HTTP] Error: {e}")
@@ -284,7 +267,6 @@ async def _scrape_flipkart_playwright(query: str, max_results: int = 25, budget:
     """Playwright-based scraper — full browser rendering as fallback."""
     products = []
     seen_titles = []
-    core_keywords = [w.lower() for w in product_type.split() if len(w) > 2] if product_type else []
     
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=False, args=["--disable-blink-features=AutomationControlled", "--no-sandbox"])
@@ -327,7 +309,7 @@ async def _scrape_flipkart_playwright(query: str, max_results: int = 25, budget:
                     href = await link_el.get_attribute("href") if link_el else ""
                     img = await img_el.get_attribute("src") if img_el else ""
 
-                    if not _filter_and_dedup(title, price, reviews, budget, core_keywords, seen_titles):
+                    if not _filter_and_dedup(title, price, reviews, budget, seen_titles):
                         continue
 
                     full_url = f"https://www.flipkart.com{href}" if href.startswith("/") else href

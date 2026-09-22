@@ -6,6 +6,8 @@ import math
 import statistics
 from langchain_groq import ChatGroq
 from dotenv import load_dotenv
+from difflib import SequenceMatcher
+from scrapers._utils import extract_json_from_llm
 
 load_dotenv()
 
@@ -52,7 +54,6 @@ def fast_spec_prefilter(product: dict, profile: dict) -> tuple[bool, float, list
                     if word in title_lower:
                         found_any = True
                         break
-                    from difflib import SequenceMatcher
                     for title_word in title_lower.split():
                         if len(title_word) > 3 and SequenceMatcher(None, word, title_word).ratio() > 0.80:
                             found_any = True
@@ -156,7 +157,7 @@ Already confirmed by keyword match: {pre_matched}
 
 Your job: Check if this product genuinely satisfies the mandatory specs.
 
-⚠️ VETO RULES (SMART RELAXATION):
+IMPORTANT -- VETO RULES (SMART RELAXATION):
 1. NUMERICAL SPECS: Allow ±15% tolerance (e.g., 17W is acceptable for a 20W requirement, but 10W is NOT). Veto if variation exceeds 15%.
 2. BINARY SPECS (ANC, Waterproof, OLED): Use semantic matching. Veto ONLY if the feature is explicitly different or confirmed absent (e.g. "Membrane" when "Mechanical" was asked). 
 3. SUBJECTIVE SPECS (Premium, Good Bass, Slim): NEVER VETO on these. Use them for scoring 0.0-1.0 only.
@@ -180,7 +181,7 @@ Return ONLY valid JSON:
         if not raw:
             raise ValueError("Empty LLM response")
         
-        result = extract_json(raw)
+        result = extract_json_from_llm(raw)
         if result: return result
         
         # Some responses arrive fenced as Markdown despite the JSON-only prompt.
@@ -208,16 +209,6 @@ Return ONLY valid JSON:
             "missing_specs": [], 
             "reasoning": "Vetoed: Category mismatch" if should_veto else "Math fallback (Groq unavailable)"
         }
-
-def extract_json(text: str) -> dict:
-    """Safely extracts JSON from noisy LLM output using regex."""
-    match = re.search(r'\{.*\}', text, re.DOTALL)
-    if not match: return None
-    try:
-        # Clean up common LLM formatting issues
-        cleaned = match.group().replace('\"', '"').replace("\'", "'")
-        return json.loads(cleaned)
-    except Exception: return None
 
 
 # Batch-normalized score components
@@ -343,7 +334,6 @@ def compute_final_score(scores: dict, weights: dict, product: dict, profile: dic
     if product_type and product_type in title_lower:
         exact_match_multiplier = 1.15  # +15% bonus for exact phrase match
     elif product_type:
-        import re
         pt_tokens = [t for t in product_type.split() if len(t) > 1]
         has_penalty = False
         for t in pt_tokens:
@@ -378,7 +368,7 @@ def generate_why_reasons(product: dict, scores: dict, profile: dict, rank: int) 
         else: reasons.append("Strong specification match")
 
     if scores.get("price_score", 0) >= 0.70 and budget > price:
-        reasons.append(f"₹{budget-price:,.0f} under your budget")
+        reasons.append(f"Rs {budget-price:,.0f} under your budget")
 
     history_method = product.get("price_history", {}).get("method")
     if history_method == "historical_30day":
@@ -393,7 +383,7 @@ def generate_why_reasons(product: dict, scores: dict, profile: dict, rank: int) 
             reasons.append(f"{round((median-price)/median*100)}% cheaper than market median")
 
     if scores.get("rating_score", 0) >= 0.80:
-        reasons.append(f"Authentic {product.get('adjusted_rating', product.get('rating',0)):.1f}⭐ rating")
+        reasons.append(f"Authentic {product.get('adjusted_rating', product.get('rating',0)):.1f} star rating")
 
     if scores.get("popularity_score", 0) >= 0.75:
         reasons.append(f"Highly popular ({product.get('reviews_count',0):,} reviews)")
@@ -402,17 +392,17 @@ def generate_why_reasons(product: dict, scores: dict, profile: dict, rank: int) 
         reasons.append("Sold by verified platform official seller")
 
     if rank == 1:
-        reasons.append("🥇 Top overall recommendation")
+        reasons.append("Top overall recommendation")
 
     fake_pct = product.get("fake_percentage", 0)
-    if fake_pct > 0.35: reasons.append(f"⚠️ {int(fake_pct*100)}% of review signals are suspicious")
+    if fake_pct > 0.35: reasons.append(f"Warning: {int(fake_pct*100)}% of review signals are suspicious")
     
     missing = product.get("missing_specs", [])
     if missing and len(missing) > 0 and missing[0] != "AI check unavailable":
-        reasons.append(f"⚠️ May not have: {', '.join(missing[:2])}")
+        reasons.append(f"May not have: {', '.join(missing[:2])}")
 
     if scores.get("spec_score", 0.5) < 0.60 and scores.get("spec_score", 0.5) > 0:
-        reasons.append("⚠️ Partial spec match — verify before buying")
+        reasons.append("Partial spec match -- verify before buying")
 
     return reasons
 

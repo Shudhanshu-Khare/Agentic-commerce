@@ -18,6 +18,7 @@ from core.scoring import (
     generate_why_reasons,
 )
 from core.validation import validate_products, validate_profile
+from scrapers._utils import extract_json_from_llm
 
 
 EVALUATOR_LLM_MODEL = "llama-3.1-8b-instant"
@@ -109,30 +110,9 @@ def is_cacheable_llm_result(result: dict | None) -> bool:
 
 
 def _extract_json_payload(text: str) -> Any:
-    raw = str(text or "").strip().replace("```json", "").replace("```", "").strip()
-    decoder = json.JSONDecoder()
-    starts = [idx for idx, char in enumerate(raw) if char in "[{"]
-    for start in starts:
-        try:
-            payload, _ = decoder.raw_decode(raw[start:])
-            return payload
-        except Exception:
-            continue
+    """Delegate to shared robust JSON extractor."""
+    return extract_json_from_llm(text)
 
-    object_match = re.search(r"\{.*\}", raw, re.DOTALL)
-    if object_match:
-        try:
-            return json.loads(object_match.group())
-        except Exception:
-            pass
-
-    array_match = re.search(r"\[.*\]", raw, re.DOTALL)
-    if array_match:
-        try:
-            return json.loads(array_match.group())
-        except Exception:
-            pass
-    return None
 
 
 def _run_llm_spec_match_batch(batch: list[tuple[dict, list[str]]], profile: dict) -> list[dict | None]:

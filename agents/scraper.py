@@ -2,9 +2,9 @@
 import sys
 import os
 import json
+import math
 import asyncio
 import nest_asyncio
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from difflib import SequenceMatcher
 from core.validation import validate_products
@@ -48,7 +48,6 @@ def deduplicate_products(products: list[dict]) -> list[dict]:
     Instead of blindly tossing the second one, it keeps the 'best' variant
     based on a combination of lower price and higher rating/reviews.
     """
-    import math
     SIMILARITY_THRESHOLD = 0.82
     TITLE_COMPARE_LENGTH = 80
 
@@ -109,7 +108,7 @@ def save_backup(products: list[dict], query: str) -> None:
 
     with open(filename, "w", encoding="utf-8") as f:
         json.dump(products, f, ensure_ascii=False, indent=2)
-    print(f"   💾 Backup saved ({len(products)} products)")
+    print(f"   [Backup] Saved ({len(products)} products)")
 
 def load_backup(query: str) -> list[dict] | None:
     """Loads the most recent backup JSON for a given query."""
@@ -123,7 +122,7 @@ def load_backup(query: str) -> list[dict] | None:
 
     with open(latest, "r", encoding="utf-8") as f:
         products = json.load(f)
-    print(f"   📦 Backup loaded ({len(products)} products)")
+    print(f"   [Backup] Loaded ({len(products)} products)")
     return products
 
 async def _run_all_scrapers(query: str, budget: int = 0, product_type: str = ""):
@@ -142,9 +141,9 @@ async def _run_all_scrapers(query: str, budget: int = 0, product_type: str = "")
 
     for i, result in enumerate(results):
         if isinstance(result, Exception):
-            print(f"   {platform_names[i]:12s} ❌ Failed: {result}")
+            print(f"   {platform_names[i]:12s} [FAIL] {result}")
         elif isinstance(result, list):
-            print(f"   {platform_names[i]:12s} ✅ {len(result)} products")
+            print(f"   {platform_names[i]:12s} [OK]   {len(result)} products")
             all_res.extend(result)
             
     return all_res
@@ -163,7 +162,7 @@ def run_scraper(profile: dict) -> list[dict]:
         nest_asyncio.apply()
         all_products = asyncio.run(_run_all_scrapers(query, budget, product_type))
     except Exception as e:
-        print(f"   ❌ Fatal error: {e}")
+        print(f"   [FAIL] Fatal error: {e}")
         all_products = []
 
     # Patch missing platform data from the latest compatible backup when possible.
@@ -171,31 +170,31 @@ def run_scraper(profile: dict) -> list[dict]:
     flipkart_count = len([p for p in all_products if p.get("platform", "").lower() == "flipkart"])
 
     if amazon_count < 5 or flipkart_count < 5:
-        print(f"   ⚠️ Live data incomplete — attempting backup fallback...")
+        print(f"   [Warning] Live data incomplete -- attempting backup fallback...")
         backup = load_backup(query)
         
         if backup:
             if amazon_count < 5:
                 amazon_backup = [p for p in backup if p.get("platform") == "Amazon.in"]
                 all_products = [p for p in all_products if p.get("platform") != "Amazon.in"] + amazon_backup
-                print(f"   ✅ Injected {len(amazon_backup)} Amazon products from backup")
+                print(f"   [OK] Injected {len(amazon_backup)} Amazon products from backup")
                 
             if flipkart_count < 5:
                 flipkart_backup = [p for p in backup if p.get("platform", "").lower() == "flipkart"]
                 all_products = [p for p in all_products if p.get("platform", "").lower() != "flipkart"] + flipkart_backup
-                print(f"   ✅ Injected {len(flipkart_backup)} Flipkart products from backup")
+                print(f"   [OK] Injected {len(flipkart_backup)} Flipkart products from backup")
         else:
-            print(f"   ⚠️ No backup found — using live data only")
+            print(f"   [Warning] No backup found -- using live data only")
 
     if len(all_products) < 15:
-        print(f"   ⚠️ Low product count: {len(all_products)} products")
+        print(f"   [Warning] Low product count: {len(all_products)} products")
 
     # Only replace a backup when both live sources returned enough data.
     if amazon_count >= 10 and flipkart_count >= 10:
         save_backup(all_products, query)
 
     if not all_products:
-        print("   ⚠️ No products found from any platform")
+        print("   [Warning] No products found from any platform")
 
     budget = profile.get("budget_inr")
     if budget:

@@ -52,25 +52,3 @@ class Product(BaseModel):
     final_score: float = 0.0
     rank: int = 0
     why: List[str] = Field(default_factory=list)
-
-class ReviewData(BaseModel):
-    model_config = ConfigDict(extra="allow")
-
-    text: str = ""
-    rating: int = 5
-    verified: bool = True
-    date: str = ""
-    location: str = ""
-    reviewer_name: str = ""
-
-class TrustAnalysis(BaseModel):
-    model_config = ConfigDict(extra="allow")
-
-    fake_percentage: float = 0.0
-    red_flags: List[str] = Field(default_factory=list)
-    adjusted_rating: float = 0.0
-    trust_score: float = 0.5
-    verdict: str = "Unknown"
-    heuristic_score: float = 0.0
-    llm_score: float = 0.0
-    platform_summary_used: bool = False
