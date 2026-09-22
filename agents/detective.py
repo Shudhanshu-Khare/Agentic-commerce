@@ -18,24 +18,24 @@ def signal_rating_volume_trust(rating: float, review_count: int) -> tuple[float,
     Weight: 35% of heuristic total.
     """
     if review_count == 0:
-        return 0.50, "No reviews at all — cannot verify authenticity"
+        return 0.50, "No reviews at all  - cannot verify authenticity"
 
     suspicion = 0.0
     flag = None
 
-    # Perfect rating with very few reviews — strongest signal
+    # Perfect rating with very few reviews  - strongest signal
     if rating >= 4.9 and review_count < 50:
         suspicion = 0.45
-        flag = f"Suspicious: {rating} star from only {review_count} reviews — too perfect too soon"
+        flag = f"Suspicious: {rating} star from only {review_count} reviews  - too perfect too soon"
     elif rating >= 4.8 and review_count < 100:
         suspicion = 0.35
-        flag = f"Suspicious: {rating} star from only {review_count} reviews — needs more validation"
+        flag = f"Suspicious: {rating} star from only {review_count} reviews  - needs more validation"
     elif rating >= 4.7 and review_count < 150:
         suspicion = 0.25
-        flag = f"Caution: {rating} star with only {review_count} reviews — rating may change as more users review"
+        flag = f"Caution: {rating} star with only {review_count} reviews  - rating may change as more users review"
     elif rating >= 4.5 and review_count < 200:
         suspicion = 0.15
-        flag = f"Low confidence: {review_count} reviews for a {rating} star rating — still building credibility"
+        flag = f"Low confidence: {review_count} reviews for a {rating} star rating  - still building credibility"
 
     return suspicion, flag
 
@@ -48,23 +48,23 @@ def signal_price_rating_anomaly(price: float, rating: float, review_count: int) 
     if price <= 0 or rating == 0:
         return 0.0, None
 
-    # Premium products (>₹50K) — laptops, phones, TVs
+    # Premium products (>₹50K)  - laptops, phones, TVs
     if price > 50000:
         if rating >= 4.8 and review_count < 200:
-            return 0.40, f"Premium product (₹{price:,.0f}) with {rating} star from only {review_count} reviews — statistically very rare"
+            return 0.40, f"Premium product (₹{price:,.0f}) with {rating} star from only {review_count} reviews  - statistically very rare"
         elif rating == 5.0:
-            return 0.35, f"Perfect 5.0 star on a ₹{price:,.0f} product — no real product at this price has zero complaints"
+            return 0.35, f"Perfect 5.0 star on a ₹{price:,.0f} product  - no real product at this price has zero complaints"
         elif rating >= 4.7 and review_count < 100:
             return 0.25, f"High rating {rating} star with very few reviews ({review_count}) for a premium product"
 
     # Mid-range products (₹10K-₹50K)
     elif price > 10000:
         if rating == 5.0 and review_count < 100:
-            return 0.30, f"Perfect 5.0 star with only {review_count} reviews on a mid-range product — highly unlikely"
+            return 0.30, f"Perfect 5.0 star with only {review_count} reviews on a mid-range product  - highly unlikely"
         elif rating >= 4.9 and review_count < 150:
             return 0.20, f"Near-perfect {rating} star with few reviews ({review_count}) for this price tier"
 
-    # Budget products (<₹500) — watch for listing manipulation
+    # Budget products (<₹500)  - watch for listing manipulation
     elif price < 500:
         if rating >= 4.8 and review_count < 200:
             return 0.15, f"Ultra-cheap product (₹{price:,.0f}) with suspiciously high rating and low review count"
@@ -78,7 +78,7 @@ def signal_round_number_suspicion(review_count: int) -> tuple[float, str | None]
     """
     round_numbers = [100, 200, 500, 1000, 2000, 5000, 10000]
     if review_count in round_numbers:
-        return 0.12, f"Review count is exactly {review_count} — possibly reset or manipulated"
+        return 0.12, f"Review count is exactly {review_count}  - possibly reset or manipulated"
 
     if review_count > 1000 and str(review_count).endswith("000"):
         return 0.08, f"Suspiciously round review count: {review_count}"
@@ -109,14 +109,14 @@ def signal_cross_platform_discrepancy(product: dict, all_products: list[dict]) -
                 return (
                     0.25,
                     f"Same product rated {rating} star on {platform} but "
-                    f"{other_rating} star on {other.get('platform')} — "
+                    f"{other_rating} star on {other.get('platform')}  - "
                     f"major rating gap of {gap:.1f} stars"
                 )
             elif gap > 0.8:
                 return (
                     0.15,
                     f"Rating discrepancy: {rating} star on {platform} vs "
-                    f"{other_rating} star on {other.get('platform')} — "
+                    f"{other_rating} star on {other.get('platform')}  - "
                     f"gap of {gap:.1f} stars"
                 )
     return 0.0, None
@@ -253,10 +253,10 @@ def run_detective_on_product(
 
     # 1. Run Metadata Heuristics (weighted by importance)
     signal_weights = {
-        "rating_volume": 0.35,     # Primary signal — most reliable
-        "price_anomaly": 0.30,     # Primary signal — strong indicator
+        "rating_volume": 0.35,     # Primary signal  - most reliable
+        "price_anomaly": 0.30,     # Primary signal  - strong indicator
         "round_number": 0.15,      # Supporting signal
-        "cross_platform": 0.20,    # Supporting signal — valuable when available
+        "cross_platform": 0.20,    # Supporting signal  - valuable when available
     }
 
     signals = [

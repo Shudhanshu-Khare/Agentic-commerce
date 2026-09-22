@@ -208,7 +208,7 @@ def _parse_flipkart_items_bs4(soup, max_results, budget, product_type, seen_titl
 
 
 def _scrape_flipkart_scraperapi(query: str, max_results: int = 25, budget: int = 0, product_type: str = "") -> list[dict]:
-    """Scrape Flipkart using ScraperAPI — fastest and most reliable."""
+    """Scrape Flipkart using ScraperAPI  - fastest and most reliable."""
     import requests
     from bs4 import BeautifulSoup
 
@@ -237,7 +237,7 @@ def _scrape_flipkart_scraperapi(query: str, max_results: int = 25, budget: int =
 
 
 def _scrape_flipkart_http(query: str, max_results: int = 25, budget: int = 0, product_type: str = "") -> list[dict]:
-    """Scrape Flipkart using plain HTTP — fast, no browser fingerprint."""
+    """Scrape Flipkart using plain HTTP  - fast, no browser fingerprint."""
     import requests
     from bs4 import BeautifulSoup
 
@@ -264,7 +264,7 @@ def _scrape_flipkart_http(query: str, max_results: int = 25, budget: int = 0, pr
 
 
 async def _scrape_flipkart_playwright(query: str, max_results: int = 25, budget: int = 0, product_type: str = "") -> list[dict]:
-    """Playwright-based scraper — full browser rendering as fallback."""
+    """Playwright-based scraper  - full browser rendering as fallback."""
     products = []
     seen_titles = []
     

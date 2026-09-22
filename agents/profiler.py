@@ -19,7 +19,7 @@ Handle ALL product categories.
   "product_type": "<laptop, phone, shoes, mixer, etc.>",
   "budget_inr": <integer or null>,
   "budget_flexibility": 0.10,
-  "search_keywords": "<STRICT: Pick ONLY the top 2 most important specs FROM THE USER'S INPUT. DO NOT add any words, features, or specs that the user did not explicitly mention. Keep it short — max 4-5 words total.>",
+  "search_keywords": "<STRICT: Pick ONLY the top 2 most important specs FROM THE USER'S INPUT. DO NOT add any words, features, or specs that the user did not explicitly mention. Keep it short  - max 4-5 words total.>",
   "mandatory_specs": {{}},
   "preferred_specs": {{}},
   "constraints": [],

@@ -9,7 +9,7 @@ from datetime import datetime
 from difflib import SequenceMatcher
 from core.validation import validate_products
 
-# Must be set BEFORE any asyncio usage — required for Playwright on Windows
+# Must be set BEFORE any asyncio usage  - required for Playwright on Windows
 if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 

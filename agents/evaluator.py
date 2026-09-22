@@ -303,7 +303,7 @@ def run_evaluator(products: list[dict], profile: dict) -> list[dict]:
             product["pre_matched"] = pre_matched
             stage1_results.append(product)
 
-    print(f"   Stage 1 — Keyword Filter  : {len(stage1_results)} passed, {vetoed_count} vetoed")
+    print(f"   Stage 1  - Keyword Filter  : {len(stage1_results)} passed, {vetoed_count} vetoed")
 
     # Stage 2: Deep LLM spec match on ALL Stage 1 survivors.
     rate_limit_sleep = 0.4
@@ -362,7 +362,7 @@ def run_evaluator(products: list[dict], profile: dict) -> list[dict]:
                 print(f"     X {product.get('title', '')[:38]:40s} -> {product['spec_reasoning'][:55]}")
 
     print(
-        f"   Stage 2 — AI Spec Match   : {llm_total - llm_vetoes} passed, {llm_vetoes} vetoed "
+        f"   Stage 2  - AI Spec Match   : {llm_total - llm_vetoes} passed, {llm_vetoes} vetoed "
         f"({cache_hits} cached, {batch_calls} batch calls, {single_fallbacks} single fallbacks)"
     )
 
@@ -371,7 +371,7 @@ def run_evaluator(products: list[dict], profile: dict) -> list[dict]:
     # Stage 3: Score everything (batch-normalized).
     scored = []
     score_total = len(all_processed)
-    print(f"   Stage 3 — Scoring         : {score_total} products to normalize")
+    print(f"   Stage 3  - Scoring         : {score_total} products to normalize")
 
     for s_idx, product in enumerate(all_processed):
         print(f"   Scoring {s_idx+1}/{score_total}...", end="\r")

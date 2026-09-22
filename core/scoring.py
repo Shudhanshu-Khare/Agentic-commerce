@@ -219,7 +219,7 @@ def compute_all_scores(product: dict, profile: dict, all_products: list[dict]) -
     price  = product.get("price", 0)
 
     # 1. Price Score (Gaussian Sweet-Spot Curve)
-    #    Peak at ~85% of budget — practical shopping behavior:
+    #    Peak at ~85% of budget  - practical shopping behavior:
     #    ₹1500 budget → sweet spot ₹1050-₹1500 (±30% below, ±20% above)
     #    ₹50000 budget → sweet spot ₹35000-₹50000 (same proportional curve)
     #    Products way below budget score LOW (likely wrong/inferior product)
@@ -246,13 +246,13 @@ def compute_all_scores(product: dict, profile: dict, all_products: list[dict]) -
 
         scores["price_score"] = round(0.80 * budget_alignment + 0.20 * vs_median, 3)
 
-    # 2. Rating Score (Bayesian Weighting — stronger review-count bias)
+    # 2. Rating Score (Bayesian Weighting  - stronger review-count bias)
     #    A product needs ~200+ reviews before its star rating is fully trusted.
     #    1 review @ 5★ → score 0.70 (pulled toward 3.5 average)
     #    500 reviews @ 4.5★ → score 0.86 (trusted, high score)
     adj_rating = product.get("adjusted_rating", product.get("rating", 0))
     reviews    = product.get("reviews_count", 0)
-    confidence = reviews / (reviews + 200)  # was 100 — now needs 200 reviews for full trust
+    confidence = reviews / (reviews + 200)  # was 100  - now needs 200 reviews for full trust
     bayesian   = (confidence * adj_rating) + ((1 - confidence) * 3.5)
     scores["rating_score"] = round(min(bayesian / 5.0, 1.0), 3)
 
@@ -302,11 +302,11 @@ def compute_final_score(scores: dict, weights: dict, product: dict, profile: dic
         return 0.0, "Vetoed: price data unavailable"
 
     if budget and price < budget * 0.10:
-        return 0.0, f"Vetoed: ₹{price:,.0f} is only {price/budget*100:.0f}% of ₹{budget:,} budget — likely wrong product"
+        return 0.0, f"Vetoed: ₹{price:,.0f} is only {price/budget*100:.0f}% of ₹{budget:,} budget  - likely wrong product"
 
     review_count = product.get("reviews_count", 0)
     if review_count < 10:
-        return 0.0, f"Vetoed: only {review_count} review(s) — insufficient customer validation"
+        return 0.0, f"Vetoed: only {review_count} review(s)  - insufficient customer validation"
 
     trust = scores.get("trust_score", 0.5)
     trust_cap = 40.0 if trust < 0.30 else None

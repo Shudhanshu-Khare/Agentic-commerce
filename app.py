@@ -279,9 +279,7 @@ if user_input:
         m4.metric("Results", len(ranked_products), "top matches")
         m5.metric("Time", f"{total_time}s", "cached" if cache_hit else "end-to-end")
 
-        st.divider()
-        render_funnel(raw_products, unique_products, products_trust, ranked_products, flagged)
-        render_timing(timings)
+
         st.divider()
 
         if not ranked_products:
@@ -309,15 +307,18 @@ if user_input:
             p_class = "platform-amazon" if "amazon" in product["platform"].lower() else "platform-flipkart"
             verdict = product.get("review_verdict", "Unknown")
             budget_val = profile.get("budget_inr", 0) or 0
+            price = product.get("price", 0)
+            rating = product.get("adjusted_rating", product.get("rating", 0))
+            reviews = product.get("reviews_count", 0)
+
+            # Budget context
             budget_label = ""
-            if budget_val and product.get("price", 0) > 0:
-                pct = ((product["price"] - budget_val) / budget_val) * 100
-                if pct <= 0:
-                    budget_label = "Within budget"
-                elif pct <= 15:
-                    budget_label = f"{pct:.0f}% over budget"
+            if budget_val and price > 0:
+                diff = price - budget_val
+                if diff <= 0:
+                    budget_label = f"Rs {abs(diff):,.0f} under budget"
                 else:
-                    budget_label = f"{pct:.0f}% over budget"
+                    budget_label = f"Rs {diff:,.0f} over budget"
 
             with st.container():
                 c1, c2, c3 = st.columns([1.2, 4, 1.6])
@@ -327,31 +328,50 @@ if user_input:
                         st.image(product["thumbnail"], width=140)
                 with c2:
                     st.markdown(f"#### {product['title'][:100]}")
-                    st.markdown(
-                        f"**{format_price(product['price'])}** {budget_label} | "
-                        f"Rating {product.get('adjusted_rating', product.get('rating', 0)):.1f} | "
-                        f'<span class="platform-badge {p_class}">{product["platform"]}</span> '
-                        f'<span class="trust-badge {trust_class(verdict)}">{verdict}</span>',
-                        unsafe_allow_html=True,
+
+                    # Price + Rating + Platform + Trust in one clean line
+                    info_parts = [f"**{format_price(price)}**"]
+                    if budget_label:
+                        info_parts.append(budget_label)
+                    info_parts.append(f"{rating:.1f} rating ({reviews:,} reviews)")
+
+                    info_line = " | ".join(info_parts)
+                    badges = (
+                        f' <span class="platform-badge {p_class}">{product["platform"]}</span> '
+                        f'<span class="trust-badge {trust_class(verdict)}">{verdict}</span>'
                     )
-                    for reason in product.get("why", []):
-                        st.markdown(f"- {reason}")
+                    st.markdown(f"{info_line} | {badges}", unsafe_allow_html=True)
+
+                    # Only show reasons that are actually useful (skip vague ones)
+                    reasons = product.get("why", [])
+                    useful_reasons = [r for r in reasons if r and "Top overall" not in r]
+                    if useful_reasons:
+                        for reason in useful_reasons[:3]:
+                            st.markdown(f"- {reason}")
+
                     if product.get("url"):
                         st.link_button(f"View on {product['platform']}", product["url"])
+
                 with c3:
                     st.markdown(
                         f'<div style="text-align:center"><div class="score-number {score_class(score)}">{score}</div>'
                         '<div style="color:#9ca3af;font-size:0.8rem">Score / 100</div></div>',
                         unsafe_allow_html=True,
                     )
-                    with st.expander("Score Details", expanded=False):
-                        for name, value in product.get("scores", {}).items():
-                            st.write(f"**{name.replace('_', ' ').title()}:** {int(value * 100)}")
-                        hist = product.get("price_history", {})
-                        if hist:
-                            st.write(f"**Price Method:** {hist.get('method', 'unknown')}")
-                        if product.get("llm_weight_used", 0) > 0:
-                            st.write(f"**Detective LLM Score:** {product.get('llm_score', 0):.2f}")
+                    with st.expander("Score Breakdown", expanded=False):
+                        score_labels = {
+                            "spec_score": "Spec Match",
+                            "price_score": "Price",
+                            "rating_score": "Rating",
+                            "popularity_score": "Popularity",
+                            "price_history_score": "Price History",
+                            "seller_score": "Seller",
+                            "trust_score": "Trust",
+                        }
+                        for key, label in score_labels.items():
+                            val = product.get("scores", {}).get(key, 0)
+                            pct = int(val * 100)
+                            st.progress(val, text=f"{label}: {pct}/100")
 
             st.divider()
 

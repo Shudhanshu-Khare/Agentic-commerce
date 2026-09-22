@@ -166,7 +166,7 @@ def _scrape_amazon_scraperapi(query: str, max_results: int = 25, budget: int = 0
 
     api_key = os.getenv("SCRAPER_API_KEY", "").strip()
     if not api_key:
-        return []  # No key configured — skip to next strategy
+        return []  # No key configured  - skip to next strategy
 
     products = []
     seen_titles = []
@@ -187,14 +187,14 @@ def _scrape_amazon_scraperapi(query: str, max_results: int = 25, budget: int = 0
                     "country_code": "in",
                     "device_type": "desktop",
                 },
-                timeout=60  # ScraperAPI can take time — give it room
+                timeout=60  # ScraperAPI can take time  - give it room
             )
 
             if resp.status_code == 401:
                 print(f"  [ScraperAPI] Invalid API key")
                 return []
             elif resp.status_code == 429:
-                print(f"  [ScraperAPI] Monthly limit reached — falling back")
+                print(f"  [ScraperAPI] Monthly limit reached  - falling back")
                 return []
             elif resp.status_code != 200:
                 print(f"  [ScraperAPI] Page {page_num}: HTTP {resp.status_code}")
@@ -203,7 +203,7 @@ def _scrape_amazon_scraperapi(query: str, max_results: int = 25, budget: int = 0
             html = resp.text
 
             if "captcha" in html.lower():
-                print(f"  [ScraperAPI] Page {page_num}: CAPTCHA (rare) — skipping")
+                print(f"  [ScraperAPI] Page {page_num}: CAPTCHA (rare)  - skipping")
                 continue
 
             soup = BeautifulSoup(html, "html.parser")
@@ -266,7 +266,7 @@ def _scrape_amazon_scraperapi(query: str, max_results: int = 25, budget: int = 0
 def _scrape_amazon_requests(query: str, max_results: int = 25, budget: int = 0, product_type: str = "") -> list[dict]:
     """
     Scrape Amazon.in using plain HTTP requests + BeautifulSoup.
-    This avoids all browser fingerprinting — Amazon only sees a normal HTTP request.
+    This avoids all browser fingerprinting  - Amazon only sees a normal HTTP request.
     """
     import requests
     from bs4 import BeautifulSoup
@@ -389,7 +389,7 @@ def _scrape_amazon_requests(query: str, max_results: int = 25, budget: int = 0, 
 
 
 async def _scrape_amazon_playwright(query: str, max_results: int = 25, budget: int = 0, product_type: str = "") -> list[dict]:
-    """Playwright-based scraper with stealth — used as fallback."""
+    """Playwright-based scraper with stealth  - used as fallback."""
     products = []
     seen_titles = []  # For scrape-time dedup
     async with async_playwright() as p:
